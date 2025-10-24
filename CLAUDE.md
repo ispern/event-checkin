@@ -8,6 +8,137 @@
 
 **重要**: 詳細な規約とワークフローは `AGENTS.md` を参照してください。このファイルはClaude Code固有の技術詳細に特化しています。
 
+## 開発ワークフロー（Codex連携）
+
+### TDD実装フロー
+本プロジェクトは**TDD（テスト駆動開発）**で実施します。詳細は`AGENTS.md`のテスト指針を参照。
+
+### Claude CodeとCodexの役割分担
+
+1. **Claude Code（私）の役割**:
+   - 要件分析と設計
+   - テストケースの作成（TDD Red フェーズ）
+   - Codexへのタスク委託と指示
+   - 実装後のレビュー結果確認と修正指示
+
+2. **Codexの役割**:
+   - テストをパスする実装（TDD Green フェーズ）
+   - コードのリファクタリング（TDD Refactor フェーズ）
+   - 実装後の自己レビューとテスト実行
+
+### 実装手順
+
+```mermaid
+graph TD
+    A[Claude: 要件分析] --> B[Claude: テスト作成]
+    B --> C[Codex: 実装]
+    C --> D[Codex: セルフレビュー]
+    D --> E[Claude: 最終確認]
+    E --> F{テスト通過?}
+    F -->|Yes| G[Claude: ブラウザテスト]
+    F -->|No| C
+    G --> H{動作確認OK?}
+    H -->|Yes| I[完了]
+    H -->|No| C
+```
+
+### Codex呼び出し例
+
+```typescript
+// Claude Codeがテストを作成後、Codexに実装を委託
+await mcp__codex__codex({
+  prompt: `
+    以下のテストをパスする実装を行ってください：
+    - テストファイル: src/services/sheets.test.ts
+    - 実装ファイル: src/services/sheets.ts
+    - TDDのGreenフェーズとして最小限の実装を行う
+    実装後、pnpm run testでテストが通ることを確認してください。
+  `,
+  sandbox: "workspace-write",
+  approval-policy: "on-failure"
+})
+```
+
+### ブラウザテスト（Chrome DevTools MCP）
+
+UI機能の実装後は、Chrome DevTools MCPを使用してブラウザ上での動作確認を行います。
+
+#### 主要な検証項目
+
+1. **チェックイン機能の確認**
+   ```typescript
+   // ページを開いて初期状態確認
+   await mcp__chrome-devtools__navigate_page({
+     url: "http://localhost:5173/checkin"
+   })
+   await mcp__chrome-devtools__take_snapshot()
+
+   // 氏名入力と検索
+   await mcp__chrome-devtools__fill({
+     uid: "name-input",
+     value: "田中太郎"
+   })
+   await mcp__chrome-devtools__click({
+     uid: "search-button"
+   })
+
+   // チェックイン実行
+   await mcp__chrome-devtools__click({
+     uid: "checkin-button"
+   })
+   await mcp__chrome-devtools__take_screenshot({
+     fullPage: true
+   })
+   ```
+
+2. **オフライン動作の検証**
+   ```typescript
+   // オフライン状態をエミュレート
+   await mcp__chrome-devtools__emulate_network({
+     throttlingOption: "Offline"
+   })
+
+   // オフライン時の動作確認
+   await mcp__chrome-devtools__click({
+     uid: "checkin-button"
+   })
+
+   // オンライン復帰と同期確認
+   await mcp__chrome-devtools__emulate_network({
+     throttlingOption: "No emulation"
+   })
+   ```
+
+3. **パフォーマンステスト**
+   ```typescript
+   // パフォーマンストレース開始
+   await mcp__chrome-devtools__performance_start_trace({
+     reload: true,
+     autoStop: true
+   })
+
+   // 大量データでの動作確認（5000件）
+   await mcp__chrome-devtools__navigate_page({
+     url: "http://localhost:5173/admin"
+   })
+
+   // トレース停止と分析
+   await mcp__chrome-devtools__performance_stop_trace()
+   ```
+
+#### エラー監視
+```typescript
+// コンソールメッセージの取得
+const messages = await mcp__chrome-devtools__list_console_messages({
+  types: ["error", "warn"]
+})
+
+// ネットワークエラーの確認
+const requests = await mcp__chrome-devtools__list_network_requests({
+  resourceTypes: ["xhr", "fetch"]
+})
+```
+
 ## 技術アーキテクチャ
 
 ### コア技術スタック（.kiro/specs/event-participant-management/design.md より）
