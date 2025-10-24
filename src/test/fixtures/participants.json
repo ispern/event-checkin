@@ -1,0 +1,33 @@
+{
+  "participants": [
+    {
+      "id": "p001",
+      "name": "田中太郎",
+      "email": "tanaka@example.com",
+      "registrationTimestamp": "2024-01-01T10:00:00Z",
+      "checkinStatus": "not_checked_in",
+      "updatedAt": "2024-01-01T10:00:00Z",
+      "updatedBy": "system"
+    },
+    {
+      "id": "p002",
+      "name": "山田花子",
+      "email": "yamada@example.com",
+      "registrationTimestamp": "2024-01-02T11:00:00Z",
+      "checkinStatus": "checked_in",
+      "checkinAt": "2024-01-10T09:00:00Z",
+      "checkinBy": "staff@example.com",
+      "updatedAt": "2024-01-10T09:00:00Z",
+      "updatedBy": "staff@example.com"
+    },
+    {
+      "id": "p003",
+      "name": "佐藤次郎",
+      "email": "sato@example.com",
+      "registrationTimestamp": "2024-01-03T12:00:00Z",
+      "checkinStatus": "not_checked_in",
+      "updatedAt": "2024-01-03T12:00:00Z",
+      "updatedBy": "system"
+    }
+  ]
+}
