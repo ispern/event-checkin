@@ -268,3 +268,5 @@ const match = participants.find(p =>
 - **仕様**: `.kiro/specs/event-participant-management/` ディレクトリ
 - **規約**: `AGENTS.md` (コーディング規約、ワークフロー)
 - **要件**: `requirements.md` (機能仕様の最新ソース)
+- memory
+- memory タスクが完了したら、 @.kiro/specs/event-participant-management/tasks.mdにチェックすること
