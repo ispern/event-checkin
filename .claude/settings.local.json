@@ -28,7 +28,11 @@
       "Bash(pnpm test:*)",
       "Bash(pnpm add:*)",
       "mcp__codex__codex",
-      "Bash(gh pr create:*)"
+      "Bash(gh pr create:*)",
+      "Bash(pnpm dev:*)",
+      "mcp__chrome-devtools__navigate_page",
+      "mcp__chrome-devtools__take_snapshot",
+      "mcp__chrome-devtools__click"
     ],
     "deny": [],
     "ask": []
