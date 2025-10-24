@@ -21,7 +21,14 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(git pull:*)",
-      "Bash(git fetch:*)"
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(pnpm create:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm add:*)",
+      "mcp__codex__codex",
+      "Bash(gh pr create:*)"
     ],
     "deny": [],
     "ask": []
