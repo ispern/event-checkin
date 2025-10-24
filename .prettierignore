@@ -1,0 +1,23 @@
+# Dependencies
+node_modules
+pnpm-lock.yaml
+
+# Build outputs
+dist
+build
+coverage
+*.tsbuildinfo
+
+# Cache
+.cache
+.parcel-cache
+.next
+.nuxt
+
+# Temporary files
+*.tmp
+*.temp
+
+# Generated files
+*.min.js
+*.min.css

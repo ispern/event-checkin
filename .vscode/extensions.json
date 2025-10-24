@@ -1,0 +1,11 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "bradlc.vscode-tailwindcss",
+    "ZixuanChen.vitest-explorer",
+    "editorconfig.editorconfig",
+    "usernamehw.errorlens",
+    "mikestead.dotenv"
+  ]
+}
