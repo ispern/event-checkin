@@ -1,15 +1,18 @@
 import type { Participant } from '../types/participant'
 import type { ISheetsService, SheetRange, SpreadsheetMetadata, ConnectionResult } from '../types/sheets'
-import type { AppConfig } from '../types/config'
 
 export class SheetsService implements ISheetsService {
   private apiKey: string
   private spreadsheetId: string
   private accessToken: string | null = null
+  private sheetName: string = 'Sheet1' // Default sheet name
 
-  constructor(apiKey: string, spreadsheetId: string) {
+  constructor(apiKey: string, spreadsheetId: string, sheetName?: string) {
     this.apiKey = apiKey
     this.spreadsheetId = spreadsheetId
+    if (sheetName) {
+      this.sheetName = sheetName
+    }
   }
 
   setAccessToken(token: string) {
@@ -106,8 +109,9 @@ export class SheetsService implements ISheetsService {
       }
 
       // First, get headers to find system column positions
+      const headerRange = this.sheetName ? `'${this.sheetName}'!1:1` : '1:1'
       const headerResponse = await this.makeRequest(
-        `/v4/spreadsheets/${spreadsheetId}/values/1:1`
+        `/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(headerRange)}`
       )
 
       if (!headerResponse.ok) {
@@ -128,34 +132,39 @@ export class SheetsService implements ISheetsService {
       // Build update requests for each system column
       const requests = []
 
+      // Helper to create range with sheet name
+      const makeRange = (col: string, row: number) => {
+        return this.sheetName ? `'${this.sheetName}'!${col}${row}` : `${col}${row}`
+      }
+
       if (statusCol >= 0) {
         const col = this.columnIndexToLetter(statusCol)
         requests.push({
-          range: `${col}${participant.rowNumber}`,
+          range: makeRange(col, participant.rowNumber),
           values: [[participant.checkinStatus]]
         })
       }
 
-      if (checkinAtCol >= 0 && participant.checkinAt) {
+      if (checkinAtCol >= 0) {
         const col = this.columnIndexToLetter(checkinAtCol)
         requests.push({
-          range: `${col}${participant.rowNumber}`,
-          values: [[participant.checkinAt.toISOString()]]
+          range: makeRange(col, participant.rowNumber),
+          values: [[participant.checkinAt ? participant.checkinAt.toISOString() : '']]
         })
       }
 
-      if (checkinByCol >= 0 && participant.checkinBy) {
+      if (checkinByCol >= 0) {
         const col = this.columnIndexToLetter(checkinByCol)
         requests.push({
-          range: `${col}${participant.rowNumber}`,
-          values: [[participant.checkinBy]]
+          range: makeRange(col, participant.rowNumber),
+          values: [[participant.checkinBy || '']]
         })
       }
 
       if (updatedAtCol >= 0) {
         const col = this.columnIndexToLetter(updatedAtCol)
         requests.push({
-          range: `${col}${participant.rowNumber}`,
+          range: makeRange(col, participant.rowNumber),
           values: [[new Date().toISOString()]]
         })
       }
@@ -163,16 +172,16 @@ export class SheetsService implements ISheetsService {
       if (updatedByCol >= 0) {
         const col = this.columnIndexToLetter(updatedByCol)
         requests.push({
-          range: `${col}${participant.rowNumber}`,
+          range: makeRange(col, participant.rowNumber),
           values: [[participant.updatedBy || 'system']]
         })
       }
 
-      if (auditNoteCol >= 0 && participant.auditNote) {
+      if (auditNoteCol >= 0) {
         const col = this.columnIndexToLetter(auditNoteCol)
         requests.push({
-          range: `${col}${participant.rowNumber}`,
-          values: [[participant.auditNote]]
+          range: makeRange(col, participant.rowNumber),
+          values: [[participant.auditNote || '']]
         })
       }
 
@@ -210,8 +219,9 @@ export class SheetsService implements ISheetsService {
       ]
 
       // Get current headers
+      const headerRange = this.sheetName ? `'${this.sheetName}'!1:1` : '1:1'
       const response = await this.makeRequest(
-        `/v4/spreadsheets/${spreadsheetId}/values/1:1`
+        `/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(headerRange)}`
       )
 
       if (!response.ok) {
@@ -234,7 +244,7 @@ export class SheetsService implements ISheetsService {
 
       // Update headers
       const updateResponse = await this.makeRequest(
-        `/v4/spreadsheets/${spreadsheetId}/values/1:1?valueInputOption=RAW`,
+        `/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(headerRange)}?valueInputOption=RAW`,
         {
           method: 'PUT',
           body: JSON.stringify({ values: [newHeaders] })
@@ -251,7 +261,9 @@ export class SheetsService implements ISheetsService {
 
   private buildRangeString(range?: SheetRange): string {
     if (!range) {
-      return 'A:Z' // Default range
+      // Use default sheet name if no range specified
+      const defaultRange = 'A:Z'
+      return this.sheetName ? `'${this.sheetName}'!${defaultRange}` : defaultRange
     }
 
     const { sheetName, startRow, endRow, startColumn, endColumn } = range
@@ -259,9 +271,10 @@ export class SheetsService implements ISheetsService {
     const colEnd = endColumn ? this.columnIndexToLetter(endColumn) : 'Z'
     const rowStart = startRow || 1
     const rowEnd = endRow || ''
+    const sheet = sheetName || this.sheetName // Use provided sheet or default
 
-    return sheetName
-      ? `'${sheetName}'!${colStart}${rowStart}:${colEnd}${rowEnd}`
+    return sheet
+      ? `'${sheet}'!${colStart}${rowStart}:${colEnd}${rowEnd}`
       : `${colStart}${rowStart}:${colEnd}${rowEnd}`
   }
 
