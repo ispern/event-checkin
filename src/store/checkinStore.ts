@@ -18,6 +18,7 @@ interface CheckinState {
   currentParticipant: Participant | null
   loading: boolean
   error: string | null
+  previousParticipant: Participant | null // For optimistic updates
 
   // アクション
   setSearchQuery: (query: string) => void
@@ -25,6 +26,8 @@ interface CheckinState {
   checkinParticipant: () => Promise<void>
   clearError: () => void
   clearParticipant: () => void
+  optimisticUpdate: (participant: Participant) => void
+  revertOnError: () => void
 }
 
 // モックデータ（ミュータブルにして永続化をシミュレート）
@@ -65,6 +68,7 @@ export const useCheckinStore = create<CheckinState>((set, get) => ({
   currentParticipant: null,
   loading: false,
   error: null,
+  previousParticipant: null,
 
   setSearchQuery: (query) => set({ searchQuery: query }),
 
@@ -126,5 +130,24 @@ export const useCheckinStore = create<CheckinState>((set, get) => ({
 
   clearError: () => set({ error: null }),
 
-  clearParticipant: () => set({ currentParticipant: null, searchQuery: '' })
+  clearParticipant: () => set({ currentParticipant: null, searchQuery: '' }),
+
+  optimisticUpdate: (participant) => {
+    const { currentParticipant } = get()
+    set({
+      previousParticipant: currentParticipant,
+      currentParticipant: participant
+    })
+  },
+
+  revertOnError: () => {
+    const { previousParticipant } = get()
+    if (previousParticipant) {
+      set({
+        currentParticipant: previousParticipant,
+        previousParticipant: null,
+        error: 'チェックインに失敗しました。再度お試しください。'
+      })
+    }
+  }
 }))
