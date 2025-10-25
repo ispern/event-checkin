@@ -1,11 +1,11 @@
 import React from 'react'
 
 interface ErrorMessageProps {
-  message: string
+  message?: string
   onClose?: () => void
 }
 
-const ErrorMessage: React.FC<ErrorMessageProps> = ({ message, onClose }) => {
+const ErrorMessage: React.FC<ErrorMessageProps> = ({ message = '参加者が見つかりません', onClose }) => {
   return (
     <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center justify-between">
       <div className="flex items-center">
@@ -21,7 +21,7 @@ const ErrorMessage: React.FC<ErrorMessageProps> = ({ message, onClose }) => {
             clipRule="evenodd"
           />
         </svg>
-        <span className="font-medium">{message || '参加者が見つかりません'}</span>
+        <span className="font-medium">{message}</span>
       </div>
       {onClose && (
         <button
