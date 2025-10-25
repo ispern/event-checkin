@@ -5,9 +5,11 @@ export class CheckinService {
   private sheetsService: SheetsService
   private cache: Map<string, Participant> = new Map()
   private readonly UNDO_TIME_LIMIT = 5 * 60 * 1000 // 5 minutes in milliseconds
+  private spreadsheetId: string
 
-  constructor(sheetsService: SheetsService) {
+  constructor(sheetsService: SheetsService, spreadsheetId: string) {
     this.sheetsService = sheetsService
+    this.spreadsheetId = spreadsheetId
   }
 
   async searchParticipant(name: string): Promise<Participant | null> {
@@ -20,7 +22,7 @@ export class CheckinService {
     }
 
     // Fetch from sheets
-    const participants = await this.sheetsService.readParticipants()
+    const participants = await this.sheetsService.readParticipants(this.spreadsheetId)
 
     // Find exact match
     const participant = participants.find(p => {
@@ -40,7 +42,7 @@ export class CheckinService {
   }
 
   async checkinParticipant(participantId: string): Promise<void> {
-    const participants = await this.sheetsService.readParticipants()
+    const participants = await this.sheetsService.readParticipants(this.spreadsheetId)
     const participant = participants.find(p => p.id === participantId)
 
     if (!participant) {
@@ -51,21 +53,27 @@ export class CheckinService {
       throw new Error('Participant is already checked in')
     }
 
+    // Create updated participant with audit info
     const updatedParticipant = {
       ...participant,
       checkinStatus: 'checked_in' as const,
       checkinAt: new Date(),
       checkinBy: this.getCurrentUser(),
       updatedAt: new Date(),
-      updatedBy: this.getCurrentUser()
+      updatedBy: this.getCurrentUser(),
+      auditNote: `Checked in at ${new Date().toISOString()} by ${this.getCurrentUser()}`
     }
 
-    await this.updateCheckinStatus(updatedParticipant)
-    this.recordAuditLog(updatedParticipant, '��ï��L')
+    // Update in sheets
+    await this.sheetsService.updateParticipant(this.spreadsheetId, updatedParticipant)
+
+    // Update cache
+    const normalizedName = this.normalizeNameForSearch(participant.name)
+    this.setCached(normalizedName, updatedParticipant)
   }
 
   async undoCheckin(participantId: string): Promise<void> {
-    const participants = await this.sheetsService.readParticipants()
+    const participants = await this.sheetsService.readParticipants(this.spreadsheetId)
     const participant = participants.find(p => p.id === participantId)
 
     if (!participant) {
@@ -83,10 +91,14 @@ export class CheckinService {
       checkinBy: undefined,
       updatedAt: new Date(),
       updatedBy: this.getCurrentUser(),
-      auditNote: this.undoReason('��ï��֊�W')
+      auditNote: `Checkin undone at ${new Date().toISOString()} by ${this.getCurrentUser()}`
     }
 
-    await this.sheetsService.updateParticipant(this.sheetsService['spreadsheetId'], updatedParticipant)
+    await this.sheetsService.updateParticipant(this.spreadsheetId, updatedParticipant)
+
+    // Update cache
+    const normalizedName = this.normalizeNameForSearch(participant.name)
+    this.setCached(normalizedName, updatedParticipant)
   }
 
   canUndo(participant: Participant): boolean {
@@ -105,26 +117,9 @@ export class CheckinService {
     return participant.checkinStatus === 'checked_in'
   }
 
-  private async updateCheckinStatus(participant: Participant): Promise<void> {
-    await this.sheetsService.updateParticipant(this.sheetsService['spreadsheetId'], participant)
-
-    // Update cache
-    const normalizedName = this.normalizeNameForSearch(participant.name)
-    this.setCached(normalizedName, participant)
-  }
-
-  private recordAuditLog(participant: Participant, action: string): void {
-    // In a real implementation, this would write to a separate audit log
-    participant.auditNote = `${action} - ${new Date().toISOString()} by ${this.getCurrentUser()}`
-  }
-
   private getCurrentUser(): string {
     // In a real implementation, this would get the current logged-in user
     return 'current-user@example.com'
-  }
-
-  private undoReason(reason: string): string {
-    return `チェックイン取り消し: ${reason} - ${new Date().toISOString()} by ${this.getCurrentUser()}`
   }
 
   private getCached(key: string): Participant | undefined {

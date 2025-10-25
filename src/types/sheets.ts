@@ -22,9 +22,15 @@ export interface SpreadsheetMetadata {
   }>
 }
 
-export interface SheetsService {
-  testConnection(): Promise<boolean>
-  readParticipants(range?: SheetRange): Promise<Participant[]>
-  updateParticipant(participant: Participant): Promise<void>
-  addSystemColumns(columns: string[]): Promise<void>
+export interface ConnectionResult {
+  success: boolean
+  error?: string
+  metadata?: SpreadsheetMetadata
+}
+
+export interface ISheetsService {
+  testConnection(sheetUrl?: string): Promise<ConnectionResult>
+  readParticipants(sheetId?: string, range?: SheetRange): Promise<Participant[]>
+  updateParticipant(sheetId: string, participant: Participant): Promise<void>
+  addSystemColumns(sheetId: string): Promise<void>
 }

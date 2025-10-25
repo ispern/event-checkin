@@ -1,13 +1,8 @@
 import type { Participant } from '../types/participant'
-import type { SheetsService, SheetRange, SpreadsheetMetadata } from '../types/sheets'
+import type { ISheetsService, SheetRange, SpreadsheetMetadata, ConnectionResult } from '../types/sheets'
+import type { AppConfig } from '../types/config'
 
-interface ConnectionResult {
-  success: boolean
-  error?: string
-  metadata?: SpreadsheetMetadata
-}
-
-export class SheetsService implements SheetsService {
+export class SheetsService implements ISheetsService {
   private apiKey: string
   private spreadsheetId: string
   private accessToken: string | null = null
@@ -70,18 +65,32 @@ export class SheetsService implements SheetsService {
       const data = await response.json()
       const rows = data.values || []
 
+      if (rows.length === 0) return []
+
+      // First row contains headers
+      const headers = rows[0]
+      const idCol = headers.indexOf('_participant_id')
+      const nameCol = headers.indexOf('name') >= 0 ? headers.indexOf('name') : 1
+      const emailCol = headers.indexOf('email') >= 0 ? headers.indexOf('email') : 2
+      const statusCol = headers.indexOf('_checkin_status')
+      const checkinAtCol = headers.indexOf('_checkin_at')
+      const checkinByCol = headers.indexOf('_checkin_by')
+      const updatedAtCol = headers.indexOf('_updated_at')
+      const updatedByCol = headers.indexOf('_updated_by')
+      const auditNoteCol = headers.indexOf('_audit_note')
+
       // Skip header row and map to participants
       return rows.slice(1).map((row: any[], index: number) => ({
-        id: row[0] || `participant-${index}`,
-        name: row[1] || '',
-        email: row[2] || undefined,
-        registrationTimestamp: row[3] ? new Date(row[3]) : new Date(),
-        checkinStatus: row[4] === 'checked_in' ? 'checked_in' : 'not_checked_in',
-        checkinAt: row[5] ? new Date(row[5]) : undefined,
-        checkinBy: row[6] || undefined,
-        updatedAt: row[7] ? new Date(row[7]) : new Date(),
-        updatedBy: row[8] || 'system',
-        auditNote: row[9] || undefined
+        id: (idCol >= 0 && row[idCol]) || `participant-${index + 2}`,
+        name: row[nameCol] || '',
+        email: row[emailCol] || undefined,
+        checkinStatus: (statusCol >= 0 && row[statusCol] === 'checked_in') ? 'checked_in' : 'not_checked_in',
+        checkinAt: (checkinAtCol >= 0 && row[checkinAtCol]) ? new Date(row[checkinAtCol]) : undefined,
+        checkinBy: (checkinByCol >= 0 && row[checkinByCol]) || undefined,
+        updatedAt: (updatedAtCol >= 0 && row[updatedAtCol]) ? new Date(row[updatedAtCol]) : undefined,
+        updatedBy: (updatedByCol >= 0 && row[updatedByCol]) || undefined,
+        auditNote: (auditNoteCol >= 0 && row[auditNoteCol]) || undefined,
+        rowNumber: index + 2 // Store the actual row number (accounting for header)
       }))
     } catch (error) {
       throw new Error(`Failed to read participants: ${error}`)
@@ -91,27 +100,91 @@ export class SheetsService implements SheetsService {
   async updateParticipant(sheetId: string, participant: Participant): Promise<void> {
     try {
       const spreadsheetId = sheetId || this.spreadsheetId
-      const rowNumber = participant.rowNumber || 2 // Default to row 2 if not specified
-      const range = `A${rowNumber}:J${rowNumber}`
 
-      const values = [[
-        participant.id,
-        participant.name,
-        participant.email || '',
-        participant.registrationTimestamp?.toISOString() || '',
-        participant.checkinStatus,
-        participant.checkinAt?.toISOString() || '',
-        participant.checkinBy || '',
-        new Date().toISOString(),
-        participant.updatedBy || 'system',
-        participant.auditNote || ''
-      ]]
+      if (!participant.rowNumber) {
+        throw new Error('Row number is required for update')
+      }
 
+      // First, get headers to find system column positions
+      const headerResponse = await this.makeRequest(
+        `/v4/spreadsheets/${spreadsheetId}/values/1:1`
+      )
+
+      if (!headerResponse.ok) {
+        throw new Error(`Failed to read headers: ${headerResponse.statusText}`)
+      }
+
+      const headerData = await headerResponse.json()
+      const headers = headerData.values?.[0] || []
+
+      // Find system column indices
+      const statusCol = headers.indexOf('_checkin_status')
+      const checkinAtCol = headers.indexOf('_checkin_at')
+      const checkinByCol = headers.indexOf('_checkin_by')
+      const updatedAtCol = headers.indexOf('_updated_at')
+      const updatedByCol = headers.indexOf('_updated_by')
+      const auditNoteCol = headers.indexOf('_audit_note')
+
+      // Build update requests for each system column
+      const requests = []
+
+      if (statusCol >= 0) {
+        const col = this.columnIndexToLetter(statusCol)
+        requests.push({
+          range: `${col}${participant.rowNumber}`,
+          values: [[participant.checkinStatus]]
+        })
+      }
+
+      if (checkinAtCol >= 0 && participant.checkinAt) {
+        const col = this.columnIndexToLetter(checkinAtCol)
+        requests.push({
+          range: `${col}${participant.rowNumber}`,
+          values: [[participant.checkinAt.toISOString()]]
+        })
+      }
+
+      if (checkinByCol >= 0 && participant.checkinBy) {
+        const col = this.columnIndexToLetter(checkinByCol)
+        requests.push({
+          range: `${col}${participant.rowNumber}`,
+          values: [[participant.checkinBy]]
+        })
+      }
+
+      if (updatedAtCol >= 0) {
+        const col = this.columnIndexToLetter(updatedAtCol)
+        requests.push({
+          range: `${col}${participant.rowNumber}`,
+          values: [[new Date().toISOString()]]
+        })
+      }
+
+      if (updatedByCol >= 0) {
+        const col = this.columnIndexToLetter(updatedByCol)
+        requests.push({
+          range: `${col}${participant.rowNumber}`,
+          values: [[participant.updatedBy || 'system']]
+        })
+      }
+
+      if (auditNoteCol >= 0 && participant.auditNote) {
+        const col = this.columnIndexToLetter(auditNoteCol)
+        requests.push({
+          range: `${col}${participant.rowNumber}`,
+          values: [[participant.auditNote]]
+        })
+      }
+
+      // Batch update all values
       const response = await this.makeRequest(
-        `/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=RAW`,
+        `/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`,
         {
-          method: 'PUT',
-          body: JSON.stringify({ values })
+          method: 'POST',
+          body: JSON.stringify({
+            valueInputOption: 'RAW',
+            data: requests
+          })
         }
       )
 
@@ -148,8 +221,16 @@ export class SheetsService implements SheetsService {
       const data = await response.json()
       const currentHeaders = data.values?.[0] || []
 
-      // Add system columns to the end
-      const newHeaders = [...currentHeaders, ...systemColumns]
+      // Check which system columns are missing
+      const columnsToAdd = systemColumns.filter(col => !currentHeaders.includes(col))
+
+      if (columnsToAdd.length === 0) {
+        // All system columns already exist
+        return
+      }
+
+      // Add only missing system columns to the end
+      const newHeaders = [...currentHeaders, ...columnsToAdd]
 
       // Update headers
       const updateResponse = await this.makeRequest(
